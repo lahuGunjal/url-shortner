@@ -1,12 +1,11 @@
 package urlshorten
 
 import (
-	"crypto/md5"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"log"
-	"strings"
 	"sync"
 
 	"github.com/lahuGunjal/url-shortner/api/model"
@@ -18,12 +17,23 @@ type URLDetailsMap struct {
 	Mux  *sync.Mutex
 }
 
+// WebUrl Stats For most used urls
+type Stats struct {
+	Data map[string]int
+	Mux  *sync.Mutex
+}
+
+var stats *Stats
 var urlMap *URLDetailsMap
 
 // InitialiseMap initializes the URLDetailsMap for the URL shortener.
 func InitialiseMap() {
 	urlMap = &URLDetailsMap{
 		Data: make(map[string]*model.URLDetails),
+		Mux:  &sync.Mutex{},
+	}
+	stats = &Stats{
+		Data: make(map[string]int),
 		Mux:  &sync.Mutex{},
 	}
 }
@@ -45,38 +55,67 @@ func GetURLFromMap(url string) *model.URLDetails {
 	return &model.URLDetails{}
 }
 
-// createURLService generates a shortened URL based on the provided URL details.
-func createURLService(reqURLDetails model.RequestURLData) string {
-	urlDetails := model.URLDetails{}
-	urlDetails.HashValue = getHashValue(reqURLDetails.URL)
-	urlData := GetURLFromMap(urlDetails.HashValue)
-	if urlData.HashValue != "" {
-		return fmt.Sprintf("%s/%s", urlData.DomainName, urlData.HashValue)
-	}
+func StoreStats(webUrl string) {
+	stats.Mux.Lock()
+	defer stats.Mux.Unlock()
+	stats.Data[webUrl] = 1
+}
+func UpdateStats(webUrl string, count int) {
+	stats.Mux.Lock()
+	defer stats.Mux.Unlock()
+	stats.Data[webUrl] = count
+}
 
+func LoadStats(webUrl string) int {
+	stats.Mux.Lock()
+	defer stats.Mux.Unlock()
+	return stats.Data[webUrl]
+}
+
+// createURLService generates a shortened URL based on the provided URL details.
+func createURLService(reqURLDetails model.RequestURLData) (string, error) {
+	urlDetails := model.URLDetails{}
+	//check if the url ia allready available in map
+	shortURL := CheckIfURLAvailable(reqURLDetails.URL)
+	if shortURL != "" {
+		return shortURL, nil
+	}
+	//gnerate code uniq code
+	genCode, err := GenerateCryptoID()
+	if err != nil {
+		return "", err
+	}
+	//Prepare model
+	urlDetails.HashValue = genCode
 	urlDetails.DomainName = reqURLDetails.DomainName
 	urlDetails.OriginalURL = reqURLDetails.URL
-	urlDetails.ShortenedURL = fmt.Sprintf("%s/%s", urlDetails.OriginalURL, urlDetails.HashValue)
-
+	urlDetails.ShortenedURL = fmt.Sprintf("%s/%s", urlDetails.DomainName, urlDetails.HashValue)
+	//Store details in memory map
 	StoreURLToMap(&urlDetails)
-	return fmt.Sprintf("%s/%s", urlDetails.DomainName, urlDetails.HashValue)
+	return urlDetails.ShortenedURL, nil
 }
 
-// getHashValue generates an MD5 hash value for the given URL.
-func getHashValue(url string) string {
-	hasher := md5.New()
-	hasher.Write([]byte(url))
-	hashValue := hasher.Sum(nil)
-	hashString := hex.EncodeToString(hashValue)
-	return hashString
+// Encode a string to Base64
+func EncodeToString(src string) string {
+	return base64.StdEncoding.EncodeToString([]byte(src))
 }
 
-// validateURL checks the validity of the input URL.
-func validateURL(shortURL string) error {
-	splitPath := strings.Split(shortURL, "/")
-	if len(splitPath) != 2 {
-		log.Println("INVALID_URL")
-		return errors.New("INVALID_URL")
+func CheckIfURLAvailable(originalURL string) string {
+	urlMap.Mux.Lock()
+	defer urlMap.Mux.Unlock()
+	for _, urlDetails := range urlMap.Data {
+		if urlDetails.OriginalURL == originalURL {
+			return urlDetails.ShortenedURL
+		}
 	}
-	return nil
+	return ""
+}
+
+func GenerateCryptoID() (string, error) {
+	bytes := make([]byte, 6)
+	if _, err := rand.Read(bytes); err != nil {
+		log.Println("ERROR_WHILE_GNERATING_UNIQ_ID")
+		return "", err
+	}
+	return EncodeToString(hex.EncodeToString(bytes)), nil
 }

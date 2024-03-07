@@ -1,6 +1,6 @@
 # url-shortner
 
-# HOW To RUN Application
+# How to run application
     1 . Using code 
         * Clone repo using git clone
             git clone git@github.com:lahuGunjal/url-shortner.git
@@ -18,7 +18,7 @@
             ex.{
 	    "url":"https://www.youtube.com/watch?v=HH_a6aRO1TE&list=RD0fV1CjD6pRM&index=3",
 	    "domainName":"http://localhost:1323"
-    }
+    		}
 
     2 /url/get/:url : This is the get request you have give the url Id you will get original url in response
     ex . req : http://localhost:1323/url/create/Y2Q3NmU5OGU3ZmM0

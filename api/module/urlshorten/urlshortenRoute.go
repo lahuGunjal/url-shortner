@@ -47,7 +47,15 @@ func CreateURLRoute(c echo.Context) error {
 func GetURLRoute(c echo.Context) error {
 	log.Println("Info: IN GetURLRoute route")
 	shortURL := c.Param("url")
+	if shortURL == "" {
+		log.Println("Info: OUT GetURLRoute route")
+		return c.JSON(http.StatusExpectationFailed, "MISSING_URL")
+	}
 	urlDetails := GetURLFromMap(shortURL)
+	if urlDetails.OriginalURL == "" {
+		log.Println("Info: OUT GetURLRoute route")
+		return c.JSON(http.StatusExpectationFailed, "URL_NOT_FOUND")
+	}
 	log.Println("Info: OUT GetURLRoute route")
 	return c.JSON(http.StatusOK, urlDetails.OriginalURL)
 }

@@ -1,7 +1,6 @@
 package urlshorten
 
 import (
-	"errors"
 	"log"
 	"net/http"
 
@@ -13,6 +12,7 @@ func Init(e *echo.Echo) {
 	e.POST("/url/create", CreateURLRoute)
 	e.GET("/url/get/:url", GetURLRoute)
 	e.GET("/:url", RedirectRoute)
+	e.GET("/domainstats", GetDomainStatsRoute)
 	InitialiseMap()
 }
 
@@ -60,8 +60,18 @@ func RedirectRoute(c echo.Context) error {
 		http.Redirect(c.Response().Writer, c.Request(), urlDetails.OriginalURL, http.StatusMovedPermanently)
 	} else {
 		log.Println("Info: OUT Redirect route")
-		return c.JSON(http.StatusNotFound, errors.New("URL not found"))
+		return c.JSON(http.StatusNotFound, "URL not found")
 	}
 	log.Println("Info: OUT Redirect route")
 	return c.JSON(http.StatusOK, nil)
+}
+
+func GetDomainStatsRoute(c echo.Context) error {
+	log.Println("Info: IN GetURLRoute route")
+	keyValueSlice := GetStatsService()
+	if len(keyValueSlice) == 0 {
+		return c.JSON(http.StatusOK, "No data found")
+	}
+	log.Println("Info: OUT GetURLRoute route")
+	return c.JSON(http.StatusOK, keyValueSlice)
 }

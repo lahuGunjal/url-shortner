@@ -1,6 +1,7 @@
 package urlshorten
 
 import (
+	"errors"
 	"log"
 	"net/http"
 
@@ -11,9 +12,9 @@ import (
 func Init(e *echo.Echo) {
 	e.POST("/url/create", CreateURLRoute)
 	e.GET("/url/get/:url", GetURLRoute)
-	e.GET("/:url", RedirectRoute)
+	e.GET("/:url", URLRedirectRoute)
 	e.GET("/domainstats", GetDomainStatsRoute)
-	InitialiseMap()
+	InitialiseStorage()
 }
 
 func CreateURLRoute(c echo.Context) error {
@@ -23,17 +24,17 @@ func CreateURLRoute(c echo.Context) error {
 	if bindErr != nil {
 		log.Println("PARAMETER_BINDING_ERROR", bindErr)
 		log.Println("Info: OUT CreateURLRoute route")
-		return c.JSON(http.StatusBadRequest, "PARAMETER_BINDING_ERROR")
+		return c.JSON(http.StatusBadRequest, errors.New("PARAMETER_BINDING_ERROR").Error())
 	}
 	if reqURLDetails.URL == "" {
 		log.Println("URL_SHOULD_NOT_BE_BLANK")
 		log.Println("Info: OUT CreateURLRoute route")
-		return c.JSON(http.StatusExpectationFailed, "MISSING_URL")
+		return c.JSON(http.StatusExpectationFailed, errors.New("MISSING_URL").Error())
 	}
 	if reqURLDetails.DomainName == "" {
 		log.Println("DomainName_SHOULD_NOT_BE_BLANK")
 		log.Println("Info: OUT CreateURLRoute route")
-		return c.JSON(http.StatusExpectationFailed, "MISSING_DOMAINNAME")
+		return c.JSON(http.StatusExpectationFailed, errors.New("MISSING_DOMAINNAME").Error())
 	}
 	url, err := createURLService(reqURLDetails)
 	if err != nil {
@@ -49,36 +50,38 @@ func GetURLRoute(c echo.Context) error {
 	shortURL := c.Param("url")
 	if shortURL == "" {
 		log.Println("Info: OUT GetURLRoute route")
-		return c.JSON(http.StatusExpectationFailed, "MISSING_URL")
+		return c.JSON(http.StatusExpectationFailed, errors.New("MISSING_URL").Error())
 	}
-	urlDetails := GetURLFromMap(shortURL)
-	if urlDetails.OriginalURL == "" {
+	originalURL, err := GetUrlService(shortURL)
+	if err != nil {
 		log.Println("Info: OUT GetURLRoute route")
-		return c.JSON(http.StatusExpectationFailed, "URL_NOT_FOUND")
+		return c.JSON(http.StatusNotFound, err.Error())
 	}
 	log.Println("Info: OUT GetURLRoute route")
-	return c.JSON(http.StatusOK, urlDetails.OriginalURL)
+	return c.JSON(http.StatusOK, originalURL)
 }
 
-func RedirectRoute(c echo.Context) error {
+// RedirectRoute redirect to actual url
+func URLRedirectRoute(c echo.Context) error {
 	log.Println("Info: IN Redirect route")
 	shortURL := c.Param("url")
-	urlDetails := GetURLFromMap(shortURL)
-	if urlDetails.OriginalURL != "" {
-		http.Redirect(c.Response().Writer, c.Request(), urlDetails.OriginalURL, http.StatusMovedPermanently)
-	} else {
+	originalURL, err := URLRedirectService(shortURL)
+	if err != nil {
 		log.Println("Info: OUT Redirect route")
-		return c.JSON(http.StatusNotFound, "URL not found")
+		c.JSON(http.StatusNotFound, err.Error())
 	}
+	http.Redirect(c.Response().Writer, c.Request(), originalURL, http.StatusMovedPermanently)
 	log.Println("Info: OUT Redirect route")
 	return c.JSON(http.StatusOK, nil)
 }
 
+// GetDomainStatsRoute to get the top 3 webDomain and there count occurances
 func GetDomainStatsRoute(c echo.Context) error {
 	log.Println("Info: IN GetURLRoute route")
 	keyValueSlice := GetStatsService()
 	if len(keyValueSlice) == 0 {
-		return c.JSON(http.StatusOK, "No data found")
+		log.Println("Info: OUT GetURLRoute route")
+		return c.JSON(http.StatusOK, errors.New("NO_DATA_FOUND").Error())
 	}
 	log.Println("Info: OUT GetURLRoute route")
 	return c.JSON(http.StatusOK, keyValueSlice)

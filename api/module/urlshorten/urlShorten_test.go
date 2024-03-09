@@ -9,14 +9,15 @@ import (
 
 	"github.com/labstack/echo"
 	"github.com/lahuGunjal/url-shortner/api/model"
+	"github.com/lahuGunjal/url-shortner/api/module/storage"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestCreateURLRoute(t *testing.T) {
 	e := echo.New()
-	InitialiseMap()
+	InitialiseStorage()
 
-	t.Run("Success", func(t *testing.T) {
+	t.Run("If pass any valid URL you should get the shortURL", func(t *testing.T) {
 		userJSON := `{
 			"url":"https://www.youtube.com/watch?v=QwVWcvmcfuk",
 			"domainName":"http://localhost:1323"
@@ -34,7 +35,7 @@ func TestCreateURLRoute(t *testing.T) {
 			assert.NotEmpty(t, responseURL)
 		}
 	})
-	t.Run("Blank Url", func(t *testing.T) {
+	t.Run("If blank is passed it shoould return missing url err", func(t *testing.T) {
 		userJSON := `{
 			"url":"",
 			"domainName":"http://localhost:1323"
@@ -49,7 +50,7 @@ func TestCreateURLRoute(t *testing.T) {
 		assert.Equal(t, "MISSING_URL", responseURL)
 		assert.Equal(t, http.StatusExpectationFailed, rec.Code)
 	})
-	t.Run("Blank DomainName", func(t *testing.T) {
+	t.Run("If domain name is provided then iyt should return MISSING_DOMAINNAME", func(t *testing.T) {
 		userJSON := `{
 			"url":"https://www.youtube.com/watch?v=QwVWcvmcfuk",
 			"domainName":""
@@ -65,7 +66,7 @@ func TestCreateURLRoute(t *testing.T) {
 		assert.Equal(t, "MISSING_DOMAINNAME", responseURL)
 		assert.Equal(t, http.StatusExpectationFailed, rec.Code)
 	})
-	t.Run("Parameter Bind Error", func(t *testing.T) {
+	t.Run("If json body is not proper it shold return parameter binding err", func(t *testing.T) {
 		userJSON := `""{
 			"org":"https://www.youtube.com/watch?v=QwVWcvmcfuk",
 			"test":""
@@ -86,19 +87,22 @@ func TestCreateURLRoute(t *testing.T) {
 func TestGetURLRoute(t *testing.T) {
 
 	e := echo.New()
-	InitialiseMap()
+	InitialiseStorage()
 	req, _ := http.NewRequest(http.MethodGet, "/url/get/NTg3ODlhZDcxMTcx", nil)
-	rec := httptest.NewRecorder()
+
 	urlDetails := model.URLDetails{}
 	urlDetails.DomainName = "http://localhost:1323/"
 	urlDetails.HashValue = "NTg3ODlhZDcxMTcx"
 	urlDetails.OriginalURL = "https://www.youtube.com/watch?v=QwVWcvmcfuk"
 	urlDetails.ShortenedURL = "http://localhost:1323/NTg3ODlhZDcxMTcx"
-	StoreURLToMap(&urlDetails)
-	c := e.NewContext(req, rec)
-	t.Run("Success", func(t *testing.T) {
+	urlMap.StoreURLToMap(&urlDetails)
+
+	t.Run("Test1: When all values are correct it should return the shortend url", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
 		c.SetParamNames("url")
 		c.SetParamValues("NTg3ODlhZDcxMTcx")
+
 		if assert.NoError(t, GetURLRoute(c)) {
 			assert.Equal(t, http.StatusOK, rec.Code)
 			// Parse the response JSON
@@ -108,7 +112,11 @@ func TestGetURLRoute(t *testing.T) {
 			assert.Equal(t, urlDetails.OriginalURL, responseURL)
 		}
 	})
-	t.Run("missing url", func(t *testing.T) {
+	t.Run("Test2: When url is not passed it should return MISSING_URL", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("url")
+		c.SetParamValues("")
 		if assert.NoError(t, GetURLRoute(c)) {
 			assert.Equal(t, http.StatusExpectationFailed, rec.Code)
 			// Parse the response JSON
@@ -119,11 +127,13 @@ func TestGetURLRoute(t *testing.T) {
 		}
 	})
 
-	t.Run("URLNotFound", func(t *testing.T) {
+	t.Run("Test3: When wrong url passed should return url not found", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
 		c.SetParamNames("url")
 		c.SetParamValues("gkggjlvkjvjnknk")
 		if assert.NoError(t, GetURLRoute(c)) {
-			assert.Equal(t, http.StatusExpectationFailed, rec.Code)
+			assert.Equal(t, http.StatusNotFound, rec.Code)
 			// Parse the response JSON
 			var response string
 			assert.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
@@ -136,23 +146,23 @@ func TestGetURLRoute(t *testing.T) {
 
 func TestGetDomainStatsRoute(t *testing.T) {
 	e := echo.New()
-	InitialiseMap()
+	InitialiseStorage()
 	req, _ := http.NewRequest(http.MethodGet, "/domainstats", nil)
 	rec := httptest.NewRecorder()
 	stats.Data["www.youtube.com"] = 3
 	stats.Data["www.wikipedia.com"] = 4
 	stats.Data["www.google.com"] = 6
 	stats.Data["www.goplayground.com"] = 8
-	topStats := []KeyValue{
-		KeyValue{
+	topStats := []storage.KeyValue{
+		storage.KeyValue{
 			Key:   "www.goplayground.com",
 			Value: 8,
 		},
-		KeyValue{
+		storage.KeyValue{
 			Key:   "www.google.com",
 			Value: 6,
 		},
-		KeyValue{
+		storage.KeyValue{
 			Key:   "www.wikipedia.com",
 			Value: 4,
 		},
@@ -163,7 +173,7 @@ func TestGetDomainStatsRoute(t *testing.T) {
 		if assert.NoError(t, GetDomainStatsRoute(c)) {
 			assert.Equal(t, http.StatusOK, rec.Code)
 			// Parse the response JSON
-			var response []KeyValue
+			var response []storage.KeyValue
 			assert.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 			// // Assert the expected original URL
 			assert.Equal(t, topStats, response)
@@ -171,12 +181,12 @@ func TestGetDomainStatsRoute(t *testing.T) {
 	})
 	t.Run("stats less than 3", func(t *testing.T) {
 		topStats = topStats[:len(topStats)-1]
-		delete(stats.Data, "www.goplayground.com")
+		delete(stats.Data, "www.youtube.com")
 		delete(stats.Data, "www.wikipedia.com")
 		if assert.NoError(t, GetDomainStatsRoute(c)) {
 			assert.Equal(t, http.StatusOK, rec.Code)
 			// Parse the response JSON
-			var response []KeyValue
+			var response []storage.KeyValue
 			assert.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 			// Assert the expected original URL
 			assert.Equal(t, topStats, response)
@@ -194,7 +204,7 @@ func TestGetDomainStatsRoute(t *testing.T) {
 			var response string
 			assert.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 			// Assert the expected original URL
-			assert.Equal(t, "No data found", response)
+			assert.Equal(t, "NO_DATA_FOUND", response)
 		}
 	})
 }

@@ -29,17 +29,17 @@ func CreateURLRoute(c echo.Context) error {
 	if reqURLDetails.URL == "" {
 		log.Println("URL_SHOULD_NOT_BE_BLANK")
 		log.Println("Info: OUT CreateURLRoute route")
-		return c.JSON(http.StatusExpectationFailed, errors.New("MISSING_URL").Error())
+		return c.JSON(http.StatusBadRequest, errors.New("MISSING_URL").Error())
 	}
 	if reqURLDetails.DomainName == "" {
 		log.Println("DomainName_SHOULD_NOT_BE_BLANK")
 		log.Println("Info: OUT CreateURLRoute route")
-		return c.JSON(http.StatusExpectationFailed, errors.New("MISSING_DOMAINNAME").Error())
+		return c.JSON(http.StatusBadRequest, errors.New("MISSING_DOMAINNAME").Error())
 	}
 	url, err := createURLService(reqURLDetails)
 	if err != nil {
 		log.Println("Info: OUT CreateURLRoute route")
-		return c.JSON(http.StatusOK, err)
+		return c.JSON(http.StatusExpectationFailed, err)
 	}
 	log.Println("Info: OUT CreateURLRoute route")
 	return c.JSON(http.StatusOK, url)
@@ -50,7 +50,7 @@ func GetURLRoute(c echo.Context) error {
 	shortURL := c.Param("url")
 	if shortURL == "" {
 		log.Println("Info: OUT GetURLRoute route")
-		return c.JSON(http.StatusExpectationFailed, errors.New("MISSING_URL").Error())
+		return c.JSON(http.StatusBadRequest, errors.New("MISSING_URL").Error())
 	}
 	originalURL, err := GetUrlService(shortURL)
 	if err != nil {
@@ -81,7 +81,7 @@ func GetDomainStatsRoute(c echo.Context) error {
 	keyValueSlice := GetStatsService()
 	if len(keyValueSlice) == 0 {
 		log.Println("Info: OUT GetURLRoute route")
-		return c.JSON(http.StatusOK, errors.New("NO_DATA_FOUND").Error())
+		return c.JSON(http.StatusNotFound, errors.New("NO_DATA_FOUND").Error())
 	}
 	log.Println("Info: OUT GetURLRoute route")
 	return c.JSON(http.StatusOK, keyValueSlice)

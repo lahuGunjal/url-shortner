@@ -48,7 +48,7 @@ func TestCreateURLRoute(t *testing.T) {
 		var responseURL string
 		assert.NoError(t, json.Unmarshal(rec.Body.Bytes(), &responseURL))
 		assert.Equal(t, "MISSING_URL", responseURL)
-		assert.Equal(t, http.StatusExpectationFailed, rec.Code)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
 	})
 	t.Run("If domain name is provided then iyt should return MISSING_DOMAINNAME", func(t *testing.T) {
 		userJSON := `{
@@ -64,7 +64,7 @@ func TestCreateURLRoute(t *testing.T) {
 		assert.NoError(t, json.Unmarshal(rec.Body.Bytes(), &responseURL))
 		// Assert the expected original URL
 		assert.Equal(t, "MISSING_DOMAINNAME", responseURL)
-		assert.Equal(t, http.StatusExpectationFailed, rec.Code)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
 	})
 	t.Run("If json body is not proper it shold return parameter binding err", func(t *testing.T) {
 		userJSON := `""{
@@ -118,7 +118,7 @@ func TestGetURLRoute(t *testing.T) {
 		c.SetParamNames("url")
 		c.SetParamValues("")
 		if assert.NoError(t, GetURLRoute(c)) {
-			assert.Equal(t, http.StatusExpectationFailed, rec.Code)
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
 			// Parse the response JSON
 			var response string
 			assert.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
@@ -148,7 +148,7 @@ func TestGetDomainStatsRoute(t *testing.T) {
 	e := echo.New()
 	InitialiseStorage()
 	req, _ := http.NewRequest(http.MethodGet, "/domainstats", nil)
-	rec := httptest.NewRecorder()
+
 	stats.Data["www.youtube.com"] = 3
 	stats.Data["www.wikipedia.com"] = 4
 	stats.Data["www.google.com"] = 6
@@ -168,8 +168,9 @@ func TestGetDomainStatsRoute(t *testing.T) {
 		},
 	}
 
-	c := e.NewContext(req, rec)
 	t.Run("Success", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
 		if assert.NoError(t, GetDomainStatsRoute(c)) {
 			assert.Equal(t, http.StatusOK, rec.Code)
 			// Parse the response JSON
@@ -180,6 +181,8 @@ func TestGetDomainStatsRoute(t *testing.T) {
 		}
 	})
 	t.Run("stats less than 3", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
 		topStats = topStats[:len(topStats)-1]
 		delete(stats.Data, "www.youtube.com")
 		delete(stats.Data, "www.wikipedia.com")
@@ -193,13 +196,15 @@ func TestGetDomainStatsRoute(t *testing.T) {
 		}
 	})
 	t.Run("no records", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
 		topStats = topStats[:0]
 		delete(stats.Data, "www.goplayground.com")
 		delete(stats.Data, "www.wikipedia.com")
 		delete(stats.Data, "www.youtube.com")
 		delete(stats.Data, "www.google.com")
 		if assert.NoError(t, GetDomainStatsRoute(c)) {
-			assert.Equal(t, http.StatusOK, rec.Code)
+			assert.Equal(t, http.StatusNotFound, rec.Code)
 			// Parse the response JSON
 			var response string
 			assert.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
